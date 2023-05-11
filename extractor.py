@@ -442,7 +442,7 @@ class ExtractionItem(object):
                                   self.extractor.do_kernel,
                                   self.extractor.do_rootfs))
 
-            for module in binwalk.scan(self.item, "--run-as=root", "--preserve-symlinks",
+            for module in binwalk.scan(self.item, "--preserve-symlinks",
                     "-e", "-r", "-C", self.temp, signature=True, quiet=True):
                 prev_entry = None
                 for entry in module.results:
@@ -750,8 +750,8 @@ def psql_check(psql_ip):
 def main():
     parser = argparse.ArgumentParser(description="Extracts filesystem and \
         kernel from Linux-based firmware images")
-    parser.add_argument("input", action="store", help="Input file or directory")
-    parser.add_argument("output", action="store", nargs="?", default="images",
+    parser.add_argument("--input", action="store", help="Input file or directory")
+    parser.add_argument("--output", action="store", nargs="?", default="images",
                         help="Output directory for extracted firmware")
     parser.add_argument("-sql ", dest="sql", action="store", default=None,
                         help="Hostname of SQL server")
@@ -770,11 +770,12 @@ def main():
                         help="Print debug information")
     result = parser.parse_args()
 
-    if psql_check(result.sql):
-        extract = Extractor(result.input, result.output, result.rootfs,
-                            result.kernel, result.parallel, result.sql,
-                            result.brand, result.debug)
-        extract.extract()
+    print(result)
+
+    extract = Extractor(result.input, result.output, result.rootfs,
+                        result.kernel, result.parallel, result.sql,
+                        result.brand, result.debug)
+    extract.extract()
 
 if __name__ == "__main__":
     main()

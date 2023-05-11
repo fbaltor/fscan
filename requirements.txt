@@ -1,0 +1,2 @@
+binwalk==2.3.3+cddfede
+python-magic==0.4.28
