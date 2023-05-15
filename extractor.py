@@ -405,13 +405,9 @@ class ExtractionItem(object):
         """
         real_path = os.path.realpath(self.item)
 
-#        print ("------ blacklist checking --------------")
-#        print (self.item)
-#        print (real_path)
         # First, use MIME-type to exclude large categories of files
         filetype = Extractor.magic(real_path.encode("utf-8", "surrogateescape"),
                                    mime=True)
-#        print (filetype)
         if filetype:
             if any(s in filetype for s in ["application/x-executable",
                                            "application/x-dosexec",
@@ -433,8 +429,6 @@ class ExtractionItem(object):
                 self.printf(">> Skipping: %s..." % filetype)
                 return True
 
-#        print (filetype)
-#        print ('-=----------------------------')
         # Finally, check for specific file extensions that would be incorrectly
         # identified
         black_lists = ['.dmg', '.so', '.so.0']
