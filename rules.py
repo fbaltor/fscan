@@ -26,7 +26,7 @@ def main():
     r = RuleEvaluator(args.input)
     for file in r.tar.getnames():
         if file.endswith('.php'):
-            print('PHP')
+            print('php')
             return
 
     

@@ -32,8 +32,8 @@ class Scanner():
                 return 'Java CGI'
             if file.endswith('luci'):
                 return 'LuCI'
-            else:
-                return 'Unknown'
+            
+        return 'Unknown'
 
     def save_data(self, processed_data):
         """
