@@ -1,10 +1,9 @@
 import argparse
-import sqlite3
 import os
+import csv
 import tarfile
 import tempfile
-from multiprocessing import Manager, Process
-from queue import Empty
+import concurrent.futures as cf
 
 from extractor import Extractor
 
@@ -16,15 +15,14 @@ class Scanner():
 
     def __init__(self, input_dir, data_file=None):
         self.input_dir = input_dir
+        self.data_file = data_file
 
-        if data_file is None:
-            data_file = 'default.db'
+        if self.data_file is None:
+            self.data_file = 'default.csv'
         
-        self.con = sqlite3.connect(data_file)
-        cursor = self.con.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS filesystem_firmwares" + 
-                       "(id INTEGER PRIMARY KEY, firmware TEXT, web_server_type TEXT)")
-        self.con.commit()
+        with open(self.data_file, 'w', newline = '') as f:
+            writer = csv.writer(f)
+            writer.writerow(["firmware", "web_server_type"])
 
     def apply_simple_rule(self, tarfile):
         for file in tarfile.getnames():
@@ -34,66 +32,46 @@ class Scanner():
                 return 'Java CGI'
             if file.endswith('luci'):
                 return 'LuCI'
-            else:
-                return 'Unknown'
+            
+        return 'Unknown'
 
     def save_data(self, processed_data):
         """
         Save the processed data to our data file.
         """
-        print(processed_data)
-        cursor = self.con.cursor()
-        cursor.execute("INSERT INTO filesystem_firmwares (firmware, web_server_type) VALUES (?, ?)", processed_data)
-        self.con.commit()
 
-    def listener(self, queue):
-        keep_waiting = True
-        while keep_waiting:
-            try:
-                processed_data = queue.get()
-                self.save_data(processed_data)
-            except Empty:
-                self.con.close()
-                keep_waiting = False
+        if not processed_data:
+            return
 
+        with open(self.data_file, 'a', newline = '') as f:
+            writer = csv.writer(f)
+            writer.writerow(processed_data)
 
-    def process_single_firmware_image(self, firmware_image_path, queue):
+    def process_single_firmware_image(self, firmware_image_path):
         with tempfile.TemporaryDirectory() as tempdir:
             extractor = Extractor(firmware_image_path, tempdir, kernel=False)
             extractor.extract()
 
             filesystems = os.listdir(tempdir)
-
             if len(filesystems) == 0:
                 return
-
             filesystem = filesystems[0]
             filesystem_path = os.path.join(tempdir, filesystem)
             tar = tarfile.open(filesystem_path)
+
+            firmware = tar.name.split('/')[-1].split('.')[0]
             firmware_web_server_type = self.apply_simple_rule(tar)
-            firmware_name = tar.name.split('/')[-1].split('.')[0]
-
-            processed_data = (firmware_name, firmware_web_server_type)
-
-            queue.put(processed_data)
+            
+            return [firmware, firmware_web_server_type]
 
     def run(self):
-        queue = Manager().Queue()
-
-        jobs = []
-
-        watcher = Process(target = self.listener, args = (queue,), daemon = True)
-        watcher.start()
-        jobs.append(watcher)
-        
-        with os.scandir(self.input_dir) as it:
-            for firmware_image in it:
-                job = Process(target = self.process_single_firmware_image, args = (firmware_image, queue))
-                job.start()
-                jobs.append(job)
-
-        for job in jobs:
-            job.join()
+        with cf.ProcessPoolExecutor() as executor:
+            with os.scandir(self.input_dir) as it:
+                for firmware_image in it:
+                    firmware_path = os.path.abspath(firmware_image.path)
+                    future = executor.submit(self.process_single_firmware_image, firmware_path)
+                    processed_data = future.result()
+                    self.save_data(processed_data)
 
 def main():
     parser = argparse.ArgumentParser()
