@@ -163,3 +163,5 @@ cython_debug/
 output
 wordlist
 out
+default.db
+input
