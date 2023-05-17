@@ -65,13 +65,15 @@ class Scanner():
             return [firmware, firmware_web_server_type]
 
     def run(self):
-        with cf.ProcessPoolExecutor() as executor:
-            with os.scandir(self.input_dir) as it:
-                for firmware_image in it:
-                    firmware_path = os.path.abspath(firmware_image.path)
-                    future = executor.submit(self.process_single_firmware_image, firmware_path)
-                    processed_data = future.result()
-                    self.save_data(processed_data)
+        with (
+            cf.ProcessPoolExecutor() as executor,
+            os.scandir(self.input_dir) as images
+        ):
+            firmware_paths = (os.path.abspath(img.path) for img in images)
+            processed_paths = executor.map(self.process_single_firmware_image, firmware_paths)
+
+            for data in processed_paths:
+                self.save_data(data)
 
 def main():
     parser = argparse.ArgumentParser()
