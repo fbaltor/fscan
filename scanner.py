@@ -1,6 +1,6 @@
 import argparse
-import sqlite3
 import os
+import csv
 import tarfile
 import tempfile
 from multiprocessing import Pool, Manager, cpu_count
@@ -15,15 +15,14 @@ class Scanner():
 
     def __init__(self, input_dir, data_file=None):
         self.input_dir = input_dir
+        self.data_file = data_file
 
-        if data_file is None:
-            data_file = 'default.db'
+        if self.data_file is None:
+            self.data_file = 'default.csv'
         
-        self.con = sqlite3.connect(data_file)
-        cursor = self.con.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS filesystem_firmwares" + 
-                       "(id INTEGER PRIMARY KEY, firmware TEXT, web_server_type TEXT)")
-        self.con.commit()
+        with open(self.data_file, 'w', newline = '') as f:
+            writer = csv.writer(f)
+            writer.writerow(["firmware", "web_server_type"])
 
     def apply_simple_rule(self, tarfile):
         for file in tarfile.getnames():
@@ -40,21 +39,15 @@ class Scanner():
         """
         Save the processed data to our data file.
         """
-        (tar, firm_web_server_type) = processed_data
+        with open(self.data_file, 'w', newline = '') as f:
+            writer = csv.writer(f)
+            writer.writerow(processed_data)
 
-        firmware = tar.name.split('/')[-1].split('.')[0]
-
-        save_query = f'INSERT INTO filesystem_firmwares (firmware, web_server_type) VALUES ({firmware}, {firm_web_server_type})'
-
-        cursor = self.con.cursor()
-        cursor.execute(save_query)
-        self.con.commit()
 
     def listener(self, queue):
         while True:
             processed_data = queue.get()
             if processed_data == 'kill':
-                self.con.close()
                 break
 
             self.save_data(processed_data)
@@ -68,9 +61,11 @@ class Scanner():
             filesystem = filesystems[0]
             filesystem_path = os.path.join(tempdir, filesystem)
             tar = tarfile.open(filesystem_path)
-            firm_web_server_type = self.apply_simple_rule(tar)
 
-            processed_data = (tar, firm_web_server_type)
+            firmware = tar.name.split('/')[-1].split('.')[0]
+            firmware_web_server_type = self.apply_simple_rule(tar)
+
+            processed_data = [firmware, firmware_web_server_type]
 
             queue.put(processed_data)
 
@@ -84,7 +79,8 @@ class Scanner():
         jobs = []
         with os.scandir(self.input_dir) as it:
             for firmware_image in it:
-                job = pool.apply_async(self.process_single_firmware_image, (firmware_image, queue))
+                firmware_path = os.path.abspath(firmware_image.path)
+                job = pool.apply_async(self.process_single_firmware_image, (firmware_path, queue))
                 jobs.append(job)
 
         for job in jobs:
