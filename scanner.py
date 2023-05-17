@@ -3,7 +3,7 @@ import os
 import csv
 import tarfile
 import tempfile
-from multiprocessing import Pool, Manager, cpu_count
+import concurrent.futures as cf
 
 from extractor import Extractor
 
@@ -39,57 +39,39 @@ class Scanner():
         """
         Save the processed data to our data file.
         """
-        with open(self.data_file, 'w', newline = '') as f:
+
+        if not processed_data:
+            return
+
+        with open(self.data_file, 'a', newline = '') as f:
             writer = csv.writer(f)
             writer.writerow(processed_data)
 
-
-    def listener(self, queue):
-        while True:
-            processed_data = queue.get()
-            if processed_data == 'kill':
-                break
-
-            self.save_data(processed_data)
-
-    def process_single_firmware_image(self, firmware_image_path, queue):
+    def process_single_firmware_image(self, firmware_image_path):
         with tempfile.TemporaryDirectory() as tempdir:
             extractor = Extractor(firmware_image_path, tempdir, kernel=False)
             extractor.extract()
 
             filesystems = os.listdir(tempdir)
+            if len(filesystems) == 0:
+                return
             filesystem = filesystems[0]
             filesystem_path = os.path.join(tempdir, filesystem)
             tar = tarfile.open(filesystem_path)
 
             firmware = tar.name.split('/')[-1].split('.')[0]
             firmware_web_server_type = self.apply_simple_rule(tar)
-
-            processed_data = [firmware, firmware_web_server_type]
-
-            queue.put(processed_data)
+            
+            return [firmware, firmware_web_server_type]
 
     def run(self):
-        manager = Manager()
-        queue = manager.Queue()
-        pool = Pool(cpu_count() + 2)
-
-        watcher = pool.apply_async(self.listener, (queue,))
-
-        jobs = []
-        with os.scandir(self.input_dir) as it:
-            for firmware_image in it:
-                firmware_path = os.path.abspath(firmware_image.path)
-                job = pool.apply_async(self.process_single_firmware_image, (firmware_path, queue))
-                jobs.append(job)
-
-        for job in jobs:
-            job.get()
-
-        queue.put('kill')
-        pool.close()
-        pool.join()
-
+        with cf.ProcessPoolExecutor() as executor:
+            with os.scandir(self.input_dir) as it:
+                for firmware_image in it:
+                    firmware_path = os.path.abspath(firmware_image.path)
+                    future = executor.submit(self.process_single_firmware_image, firmware_path)
+                    processed_data = future.result()
+                    self.save_data(processed_data)
 
 def main():
     parser = argparse.ArgumentParser()

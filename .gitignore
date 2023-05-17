@@ -164,4 +164,6 @@ output
 wordlist
 out
 default.db
+default.csv
 input
+extractions
