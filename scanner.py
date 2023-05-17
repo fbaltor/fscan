@@ -7,6 +7,7 @@ import time
 import concurrent.futures as cf
 
 from extractor import Extractor
+from rules import RuleEvaluator
 
 
 class Scanner():
@@ -24,17 +25,6 @@ class Scanner():
         with open(self.data_file, 'w', newline = '') as f:
             writer = csv.writer(f)
             writer.writerow(["firmware", "web_server_type"])
-
-    def apply_simple_rule(self, tarfile):
-        for file in tarfile.getnames():
-            if file.endswith('.php'):
-                return 'php'
-            if file.endswith('.jcgi'):
-                return 'Java CGI'
-            if file.endswith('luci'):
-                return 'LuCI'
-            
-        return 'Unknown'
 
     def save_data(self, processed_data):
         """
@@ -58,10 +48,9 @@ class Scanner():
                 return
             filesystem = filesystems[0]
             filesystem_path = os.path.join(tempdir, filesystem)
-            tar = tarfile.open(filesystem_path)
 
-            firmware = tar.name.split('/')[-1].split('.')[0]
-            firmware_web_server_type = self.apply_simple_rule(tar)
+            firmware = filesystem.split('/')[-1].split('.')[0]
+            firmware_web_server_type = RuleEvaluator.apply_simple_rule(filesystem_path)
             
             return [firmware, firmware_web_server_type]
 

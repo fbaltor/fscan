@@ -2,32 +2,35 @@ import argparse
 import tarfile
 
 class RuleEvaluator():
-    def __init__(self, input_tar_filesystem):
-        self.input_tar_filesystem = input_tar_filesystem
-        self.tar = tarfile.open(self.input_tar_filesystem)
 
-
-    def apply_simple_rule(self):
-        for file in self.tar.getnames():
-            if file.endswith('.php'):
-                return 'php'
-            if file.endswith('.jcgi'):
-                return 'Java CGI'
-            if file.endswith('luci'):
-                return 'LuCI'
-            else:
-                return 'Unknown'
+    @staticmethod
+    def apply_simple_rule(tar_path):
+        with tarfile.open(tar_path) as tf:
+            for file in tf.getmembers():
+                if file.name.endswith('.php'):
+                    return 'php'
+                if file.name.endswith('.jcgi'):
+                    return 'Java CGI'
+                if file.name.endswith('.lua'):
+                    return 'LuCI'
+                if file.name.endswith('.asp'):
+                    return 'ASP'
+                if (file.isfile()):
+                    content = tf.extractfile(file).read()
+                    if b'#!/usr/bin/perl' in content:
+                        return 'Perl CGI'
+                    if b'#!/usr/bin/python' in content:
+                        return 'Python CGI'
+                    if b'<%@ ' in content or b'<!--#include' in content or b'Server.CreateObject' in content:
+                        return 'ASP'
+            return 'Unknown'
         
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input', action = 'store')
     args = parser.parse_args()
 
-    r = RuleEvaluator(args.input)
-    for file in r.tar.getnames():
-        if file.endswith('.php'):
-            print('php')
-            return
+    print(RuleEvaluator.apply_simple_rule(args.input))
 
     
 if __name__ == '__main__':
