@@ -3,7 +3,8 @@ import sqlite3
 import os
 import tarfile
 import tempfile
-from multiprocessing import Pool, Manager, cpu_count
+from multiprocessing import Manager, Process
+from queue import Empty
 
 from extractor import Extractor
 
@@ -40,24 +41,21 @@ class Scanner():
         """
         Save the processed data to our data file.
         """
-        (tar, firm_web_server_type) = processed_data
-
-        firmware = tar.name.split('/')[-1].split('.')[0]
-
-        save_query = f'INSERT INTO filesystem_firmwares (firmware, web_server_type) VALUES ({firmware}, {firm_web_server_type})'
-
+        print(processed_data)
         cursor = self.con.cursor()
-        cursor.execute(save_query)
+        cursor.execute("INSERT INTO filesystem_firmwares (firmware, web_server_type) VALUES (?, ?)", processed_data)
         self.con.commit()
 
     def listener(self, queue):
-        while True:
-            processed_data = queue.get()
-            if processed_data == 'kill':
+        keep_waiting = True
+        while keep_waiting:
+            try:
+                processed_data = queue.get()
+                self.save_data(processed_data)
+            except Empty:
                 self.con.close()
-                break
+                keep_waiting = False
 
-            self.save_data(processed_data)
 
     def process_single_firmware_image(self, firmware_image_path, queue):
         with tempfile.TemporaryDirectory() as tempdir:
@@ -65,40 +63,42 @@ class Scanner():
             extractor.extract()
 
             filesystems = os.listdir(tempdir)
+
+            if len(filesystems) == 0:
+                return
+
             filesystem = filesystems[0]
             filesystem_path = os.path.join(tempdir, filesystem)
             tar = tarfile.open(filesystem_path)
-            firm_web_server_type = self.apply_simple_rule(tar)
+            firmware_web_server_type = self.apply_simple_rule(tar)
+            firmware_name = tar.name.split('/')[-1].split('.')[0]
 
-            processed_data = (tar, firm_web_server_type)
+            processed_data = (firmware_name, firmware_web_server_type)
 
             queue.put(processed_data)
 
     def run(self):
-        manager = Manager()
-        queue = manager.Queue()
-        pool = Pool(cpu_count() + 2)
-
-        watcher = pool.apply_async(self.listener, (queue,))
+        queue = Manager().Queue()
 
         jobs = []
+
+        watcher = Process(target = self.listener, args = (queue,), daemon = True)
+        watcher.start()
+        jobs.append(watcher)
+        
         with os.scandir(self.input_dir) as it:
             for firmware_image in it:
-                job = pool.apply_async(self.process_single_firmware_image, (firmware_image, queue))
+                job = Process(target = self.process_single_firmware_image, args = (firmware_image, queue))
+                job.start()
                 jobs.append(job)
 
         for job in jobs:
-            job.get()
-
-        queue.put('kill')
-        pool.close()
-        pool.join()
-
+            job.join()
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', action='store')
-    parser.add_argument('--data_file', action='store')
+    parser.add_argument('--input', action = 'store')
+    parser.add_argument('--data_file', action = 'store')
     args = parser.parse_args()
 
     scanner = Scanner(args.input, args.data_file)
