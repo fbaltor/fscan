@@ -3,6 +3,7 @@ import os
 import csv
 import tarfile
 import tempfile
+import time
 import concurrent.futures as cf
 
 from extractor import Extractor
@@ -85,4 +86,6 @@ def main():
     scanner.run()
 
 if __name__ == '__main__':
+    start = time.time()
     main()
+    print(f'Elapsed time: {time.time() - start}')
