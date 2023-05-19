@@ -1,10 +1,9 @@
 import argparse
 import os
 import csv
-import tarfile
 import tempfile
 import time
-import concurrent.futures as cf
+import multiprocessing as mp
 
 from extractor import Extractor
 from rules import RuleEvaluator
@@ -38,7 +37,16 @@ class Scanner():
             writer = csv.writer(f)
             writer.writerow(processed_data)
 
+    def listener(self, queue):
+        while True:
+            data = queue.get()
+            if data == 'kill':
+                break
+
+            self.save_data(data)
+
     def process_single_firmware_image(self, firmware_image_path):
+        print(f'Start processing of image {firmware_image_path}')
         with tempfile.TemporaryDirectory() as tempdir:
             extractor = Extractor(firmware_image_path, tempdir, kernel=False)
             extractor.extract()
@@ -53,17 +61,33 @@ class Scanner():
             firmware_web_server_type = RuleEvaluator.apply_simple_rule(filesystem_path)
             
             return [firmware, firmware_web_server_type]
+        
+    def worker(self, firmware_image_path, queue):
+        data = self.process_single_firmware_image(firmware_image_path)
+        queue.put(data)
+        return data
 
     def run(self):
-        with (
-            cf.ProcessPoolExecutor() as executor,
-            os.scandir(self.input_dir) as images
-        ):
-            firmware_paths = (os.path.abspath(img.path) for img in images)
-            processed_paths = executor.map(self.process_single_firmware_image, firmware_paths)
+        manager = mp.Manager()
+        queue = manager.Queue()
+        pool = manager.Pool(mp.cpu_count() + 2)
 
-            for data in processed_paths:
-                self.save_data(data)
+        watcher = mp.Process(target = self.listener, args = (queue,))
+        watcher.start()
+
+        jobs = []
+        with os.scandir(self.input_dir) as it:
+            for image in it:
+                image_path = os.path.abspath(image)
+                job = pool.apply_async(self.worker, (image_path, queue))
+                jobs.append(job)
+        
+        for job in jobs:
+            job.get()
+
+        queue.put('kill')
+        pool.close()
+        pool.join()
 
 def main():
     parser = argparse.ArgumentParser()
