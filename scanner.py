@@ -4,6 +4,7 @@ import csv
 import tempfile
 import time
 import multiprocessing as mp
+import daemonless as dm
 
 from extractor import Extractor
 from rules import RuleEvaluator
@@ -37,7 +38,9 @@ class Scanner():
             writer = csv.writer(f)
             writer.writerow(processed_data)
 
-    def listener(self, queue):
+    def listener(self):
+        global queue
+
         while True:
             data = queue.get()
             if data == 'kill':
@@ -62,24 +65,26 @@ class Scanner():
             
             return [firmware, firmware_web_server_type]
         
-    def worker(self, firmware_image_path, queue):
+    def worker(self, firmware_image_path):
+        global queue
+
         data = self.process_single_firmware_image(firmware_image_path)
         queue.put(data)
         return data
 
     def run(self):
-        manager = mp.Manager()
-        queue = manager.Queue()
-        pool = manager.Pool(mp.cpu_count() + 2)
+        global queue
+        queue = mp.Queue()
+        pool = dm.NestablePool(mp.cpu_count() + 2)
 
-        watcher = mp.Process(target = self.listener, args = (queue,))
+        watcher = mp.Process(target = self.listener)
         watcher.start()
 
         jobs = []
         with os.scandir(self.input_dir) as it:
             for image in it:
                 image_path = os.path.abspath(image)
-                job = pool.apply_async(self.worker, (image_path, queue))
+                job = pool.apply_async(self.worker, (image_path,))
                 jobs.append(job)
         
         for job in jobs:
