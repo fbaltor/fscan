@@ -1,2 +1,2 @@
-binwalk==2.3.3+cddfede
-python-magic==0.4.28
+binwalk @ git+https://github.com/fbaltor/binwalk@e4251ff458c2466c3f5662a4042d981b979a7e5d
+python-magic==0.4.27
