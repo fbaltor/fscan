@@ -1,2 +1,2 @@
-binwalk @ git+https://github.com/fbaltor/binwalk@b9b51b852482610158343f4bc31c7e4540dddd04
--e git+https://github.com/ahupp/python-magic@3ab96087d22872fc973a3b3a2db551db9bbcb5fa#egg=python_magic
+binwalk @ git+https://github.com/fbaltor/binwalk@e4251ff458c2466c3f5662a4042d981b979a7e5d
+python-magic==0.4.27
