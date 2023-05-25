@@ -3,6 +3,7 @@ import os
 import csv
 import tempfile
 import time
+import shutil
 import concurrent.futures as cf
 
 from extractor import Extractor
@@ -17,12 +18,21 @@ class Scanner():
 
     def __init__(self, input, output=None):
         self.input = input
-        self.output = output
-
-        if self.output is None:
-            self.output = 'default.csv'
+        self._initialize_output_dir(output)
         
-        with open(self.output, 'w', newline = '') as f:
+
+    def _initialize_output_dir(self, output = 'out'):
+        self.output = os.path.abspath(output)
+
+        if os.path.isdir(self.output):
+            shutil.rmtree(self.output)
+
+        os.mkdir(self.output)
+
+        SCAN_FILE_NAME = 'scan_result.csv'
+        self.scan = os.path.join(self.output, SCAN_FILE_NAME)
+
+        with open(self.scan, 'w', newline = '') as f:
             writer = csv.writer(f)
             writer.writerow(["firmware", "web_server_type"])
 
@@ -34,7 +44,7 @@ class Scanner():
         if not processed_data:
             return
 
-        with open(self.output, 'a', newline = '') as f:
+        with open(self.scan, 'a', newline = '') as f:
             writer = csv.writer(f)
             writer.writerow(processed_data)
 
@@ -51,7 +61,8 @@ class Scanner():
             filesystem_full_path = os.path.join(tempdir, filesystem)
             firmware_hash = filesystem.split('/')[-1].split('.')[0]
 
-            SAST.run_semgrep(filesystem_full_path)
+            semgrep_result_path = os.path.join(self.output, f'{firmware_hash}_semgrep.txt')
+            SAST.run_semgrep(filesystem_full_path, semgrep_result_path)
 
             firmware_web_server_type = RuleEvaluator.apply_simple_rule(filesystem_full_path)
             

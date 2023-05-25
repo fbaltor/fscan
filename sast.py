@@ -8,7 +8,7 @@ from helpers import which
 class SAST():
 
     @staticmethod
-    def run_semgrep(firmware_filesystem_path):
+    def run_semgrep(firmware_filesystem_path, semgrep_result_path):
         with tarfile.open(firmware_filesystem_path) as tf:
             extract_dir = os.path.dirname(firmware_filesystem_path)
             extract_dir = os.path.join(extract_dir, 'extract')
@@ -25,3 +25,5 @@ class SAST():
                 print("Error when running semgrep, returning...")
                 return
             
+            with open(semgrep_result_path, 'w') as f:
+                f.write(result.stdout)
