@@ -16,12 +16,14 @@ class Scanner():
     Class that scans a mass of binary firmwares.
     """
 
-    def __init__(self, input, output=None):
+    def __init__(self, input, output = None):
         self.input = input
         self._initialize_output_dir(output)
         
 
-    def _initialize_output_dir(self, output = 'out'):
+    def _initialize_output_dir(self, output):
+        if output is None:
+            output = 'out'
         self.output = os.path.abspath(output)
 
         if os.path.isdir(self.output):
