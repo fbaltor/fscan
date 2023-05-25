@@ -1,13 +1,13 @@
 import argparse
 import os
 import csv
-import tarfile
 import tempfile
 import time
 import concurrent.futures as cf
 
 from extractor import Extractor
 from rules import RuleEvaluator
+from sast import SAST
 
 
 class Scanner():
@@ -15,14 +15,14 @@ class Scanner():
     Class that scans a mass of binary firmwares.
     """
 
-    def __init__(self, input_dir, data_file=None):
-        self.input_dir = input_dir
-        self.data_file = data_file
+    def __init__(self, input, output=None):
+        self.input = input
+        self.output = output
 
-        if self.data_file is None:
-            self.data_file = 'default.csv'
+        if self.output is None:
+            self.output = 'default.csv'
         
-        with open(self.data_file, 'w', newline = '') as f:
+        with open(self.output, 'w', newline = '') as f:
             writer = csv.writer(f)
             writer.writerow(["firmware", "web_server_type"])
 
@@ -34,7 +34,7 @@ class Scanner():
         if not processed_data:
             return
 
-        with open(self.data_file, 'a', newline = '') as f:
+        with open(self.output, 'a', newline = '') as f:
             writer = csv.writer(f)
             writer.writerow(processed_data)
 
@@ -46,18 +46,21 @@ class Scanner():
             filesystems = os.listdir(tempdir)
             if len(filesystems) == 0:
                 return
-            filesystem = filesystems[0]
-            filesystem_path = os.path.join(tempdir, filesystem)
-
-            firmware = filesystem.split('/')[-1].split('.')[0]
-            firmware_web_server_type = RuleEvaluator.apply_simple_rule(filesystem_path)
             
-            return [firmware, firmware_web_server_type]
+            filesystem = filesystems[0] # Get the first filesystem
+            filesystem_full_path = os.path.join(tempdir, filesystem)
+            firmware_hash = filesystem.split('/')[-1].split('.')[0]
+
+            SAST.run_semgrep(filesystem_full_path)
+
+            firmware_web_server_type = RuleEvaluator.apply_simple_rule(filesystem_full_path)
+            
+            return [firmware_hash, firmware_web_server_type]
 
     def run(self):
         with (
             cf.ProcessPoolExecutor() as executor,
-            os.scandir(self.input_dir) as images
+            os.scandir(self.input) as images
         ):
             firmware_paths = (os.path.abspath(img.path) for img in images)
             processed_paths = executor.map(self.process_single_firmware_image, firmware_paths)
@@ -67,11 +70,11 @@ class Scanner():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', action = 'store')
-    parser.add_argument('--data_file', action = 'store')
+    parser.add_argument('--input', '-i', action = 'store')
+    parser.add_argument('--output', '-o', action = 'store')
     args = parser.parse_args()
 
-    scanner = Scanner(args.input, args.data_file)
+    scanner = Scanner(args.input, args.output)
     scanner.run()
 
 if __name__ == '__main__':
