@@ -38,17 +38,21 @@ class Scanner():
             writer = csv.writer(f)
             writer.writerow(["firmware", "web_server_type"])
 
-    def save_data(self, processed_data):
-        """
-        Save the processed data to our data file.
-        """
-
-        if not processed_data:
+    def save_webserver_bin_data(self, data):
+        if not data:
             return
 
         with open(self.scan, 'a', newline = '') as f:
             writer = csv.writer(f)
-            writer.writerow(processed_data)
+            writer.writerow(data)
+
+    def save_sast_data(self, data):
+        if not data:
+            return
+        
+        semgrep_result_path = os.path.join(self.output, f'{self.current_firmware_hash}_semgrep.txt')
+        with open(semgrep_result_path, 'w') as f:
+                f.write(data.stdout)
 
     def process_single_firmware_image(self, firmware_image_path):
         with tempfile.TemporaryDirectory() as tempdir:
@@ -61,14 +65,15 @@ class Scanner():
             
             filesystem = filesystems[0] # Get the first filesystem
             filesystem_full_path = os.path.join(tempdir, filesystem)
-            firmware_hash = filesystem.split('/')[-1].split('.')[0]
+            self.current_firmware_hash = filesystem.split('/')[-1].split('.')[0]
 
-            semgrep_result_path = os.path.join(self.output, f'{firmware_hash}_semgrep.txt')
-            SAST.run_semgrep(filesystem_full_path, semgrep_result_path)
+            sast_data = SAST.run_semgrep(filesystem_full_path)
+            self.save_sast_data(sast_data)
 
-            firmware_web_server_type = RuleEvaluator.apply_simple_rule(filesystem_full_path)
+            run_rules = True
+            firmware_web_server_type = RuleEvaluator.apply_simple_rule(filesystem_full_path) if run_rules else 'Unknown'
             
-            return [firmware_hash, firmware_web_server_type]
+            return [self.current_firmware_hash, firmware_web_server_type]
 
     def run(self):
         with (
@@ -79,7 +84,7 @@ class Scanner():
             processed_paths = executor.map(self.process_single_firmware_image, firmware_paths)
 
             for data in processed_paths:
-                self.save_data(data)
+                self.save_webserver_bin_data(data)
 
 def main():
     parser = argparse.ArgumentParser()

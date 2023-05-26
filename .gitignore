@@ -167,5 +167,8 @@ default.db
 default.csv
 *.csv
 input
+input_*
 extractions
+extractions_*
 out.txt
+out.*
