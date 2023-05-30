@@ -1,5 +1,6 @@
 import argparse
 import os
+import json
 import csv
 import tempfile
 import time
@@ -52,7 +53,7 @@ class Scanner():
         
         semgrep_result_path = os.path.join(self.output, f'{self.current_firmware_hash}_semgrep.txt')
         with open(semgrep_result_path, 'w') as f:
-                f.write(data.stdout)
+                json.dump(data, f, ensure_ascii = False, indent = 4)
 
     def process_single_firmware_image(self, firmware_image_path):
         with tempfile.TemporaryDirectory() as tempdir:
