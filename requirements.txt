@@ -1,2 +1,10 @@
+anyio==3.7.0
 binwalk @ git+https://github.com/fbaltor/binwalk@e4251ff458c2466c3f5662a4042d981b979a7e5d
+certifi==2023.5.7
+exceptiongroup==1.1.1
+h11==0.14.0
+httpcore==0.17.2
+httpx==0.24.1
+idna==3.4
 python-magic==0.4.27
+sniffio==1.3.0

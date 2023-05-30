@@ -1,7 +1,6 @@
 import argparse
 import subprocess as sp
 import os
-import csv
 import json
 import tarfile
 import tempfile
@@ -57,6 +56,10 @@ class SAST():
                     w.write(f'{rule}\n')
         
         return rule_check_id_list
+    
+    @staticmethod
+    def download_rules(rules_file):
+        pass
         
 def main():
     parser = argparse.ArgumentParser()
