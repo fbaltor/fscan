@@ -64,7 +64,7 @@ class Scanner():
             if len(filesystems) == 0:
                 return
             
-            filesystem = filesystems[0] # Get the first filesystem
+            filesystem = filesystems[0]
             filesystem_full_path = os.path.join(tempdir, filesystem)
             self.current_firmware_hash = filesystem.split('/')[-1].split('.')[0]
 

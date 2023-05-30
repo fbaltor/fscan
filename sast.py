@@ -5,6 +5,9 @@ import json
 import tarfile
 import tempfile
 
+import httpx
+import anyio
+
 from helpers import which
 
 
@@ -56,6 +59,7 @@ class SAST():
         semgrep_json = SAST.run_semgrep(firmware_filesystem_path)
         results = semgrep_json['results']
         rule_check_id_list = [result['check_id'] for result in results]
+        rule_check_id_list = list(set(rule_check_id_list))
 
         if should_output:
             print(rule_check_id_list)
@@ -63,18 +67,37 @@ class SAST():
         return rule_check_id_list
     
     @staticmethod
-    def download_rules(rules_file):
-        pass
+    def _format_rule_check_id_to_url(rule_check_id):
+        rule_parts = rule_check_id.split('.')[:-1]
+        url = '/'.join(rule_parts) + '.yaml'
+
+        return url
+
+    list_sample = ['generic.secrets.security.detected-private-key.detected-private-key',
+                'php.lang.security.unlink-use.unlink-use']
+    
+    @staticmethod
+    async def download_rules(rule_check_id_list = list_sample):
+        github_raw_url = 'https://raw.githubusercontent.com/returntocorp/semgrep-rules/develop/'
+                
+        async with httpx.AsyncClient() as client:
+            for rule_check_id in rule_check_id_list:
+                url = github_raw_url + SAST._format_rule_check_id_to_url(rule_check_id)
+                response = await client.get(url)
+                print(response.content)
+        
         
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input', '-i', action = 'store')
     parser.add_argument('--extract-rules', '-e', dest = 'extract_rules', action = 'store_true')
+    parser.add_argument('--download', '-d', dest = 'download', action = 'store_true')
     args = parser.parse_args()
 
     if args.extract_rules:
         return SAST.extract_rules(os.path.abspath(args.input), should_output = True)
-
+    elif args.download:
+        anyio.run(SAST.download_rules)
 
 if __name__ == '__main__':
     main()
