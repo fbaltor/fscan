@@ -68,8 +68,8 @@ class Scanner():
             filesystem_full_path = os.path.join(tempdir, filesystem)
             self.current_firmware_hash = filesystem.split('/')[-1].split('.')[0]
 
-            sast_data = SAST.run_semgrep(filesystem_full_path)
-            self.save_sast_data(sast_data)
+            # sast_data = SAST.run_semgrep(filesystem_full_path)
+            # self.save_sast_data(sast_data)
 
             run_rules = True
             firmware_web_server_type = RuleEvaluator.apply_simple_rule(filesystem_full_path) if run_rules else 'Unknown'

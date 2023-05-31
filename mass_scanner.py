@@ -8,16 +8,27 @@ import zipfile
 import concurrent.futures as cf
 
 from extractor import Extractor
+from rules import RuleEvaluator
 
+
+SCAN_FILE_NAME = 'scan_result.csv'
 
 class MassScanner():
-    def __init__(self, input, output = None):
-        self.input = os.path.abspath(input)
-
+    def __init__(self, input = None, output = None, evaluate_rules = None):
         if output is None:
             output = 'mass_out'
         self.output = os.path.abspath(output)
 
+        if evaluate_rules:
+            self.scan = os.path.join(self.output, SCAN_FILE_NAME)
+            return
+
+        self._initialize_clean_output_dir()
+
+        if input:
+            self.input = os.path.abspath(input)
+
+    def _initialize_clean_output_dir(self):
         if os.path.isdir(self.output):
             shutil.rmtree(self.output)
 
@@ -61,12 +72,39 @@ class MassScanner():
             return name
 
     def extract_all(self):
-        with(
+        with (
             cf.ProcessPoolExecutor() as executor,
             os.scandir(self.input) as images
         ):
             firmware_paths = (os.path.abspath(image.path) for image in images)
             executor.map(self.extract_one, firmware_paths)
+
+    def evaluate_rule_in_one(self, filesystem_path):
+        firmware_web_server_type = RuleEvaluator.apply_simple_rule(filesystem_path)
+        firmware = os.path.basename(filesystem_path)
+
+        data = [firmware, firmware_web_server_type]
+        
+        with open(self.scan, 'a') as f:
+            writer = csv.writer(f)
+            writer.writerow(data)
+
+    def _filesystem_is_valid(self, filesystem):
+        if os.path.isfile(filesystem):
+            return False
+        
+        if len(os.listdir(filesystem)) == 0:
+            return False
+
+        return True
+
+    def evaluate_rules_all(self):
+        with (
+            cf.ProcessPoolExecutor() as executor,
+            os.scandir(self.output) as filesystems
+        ):
+            filesystem_paths = (filesystem.path for filesystem in filesystems if self._filesystem_is_valid(filesystem.path))
+            executor.map(self.evaluate_rule_in_one, filesystem_paths)
 
     def run(self):
         self.extract_all()
@@ -75,10 +113,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input', '-i', action = 'store')
     parser.add_argument('--output', '-o', action = 'store')
+    parser.add_argument('--extract', '-e', action = 'store_true')
+    parser.add_argument('--evaluate-rules', '-r', dest = 'evaluate', action = 'store_true')
     args = parser.parse_args()
 
-    scanner = MassScanner(args.input, args.output)
-    scanner.run()
+    if args.extract:
+        scanner = MassScanner(input = args.input, output = args.output)
+        scanner.extract_all()
+        return
+
+    if args.evaluate:
+        scanner = MassScanner(output = args.output, evaluate_rules = args.evaluate)
+        scanner.evaluate_rules_all()
+        return
 
 if __name__ == '__main__':
     start = time.time()
