@@ -76,7 +76,8 @@ class MassScanner():
             cf.ProcessPoolExecutor() as executor,
             os.scandir(self.input) as images
         ):
-            firmware_paths = (os.path.abspath(image.path) for image in images)
+
+            firmware_paths = [os.path.abspath(image.path) for image in images if image.path != os.path.abspath(self.output)]
             executor.map(self.extract_one, firmware_paths)
 
     def evaluate_rule_in_one(self, filesystem_path):
@@ -126,6 +127,10 @@ def main():
         scanner = MassScanner(output = args.output, evaluate_rules = args.evaluate)
         scanner.evaluate_rules_all()
         return
+    
+    scanner = MassScanner(input = args.input, output = args.output)
+    scanner.extract_all()
+    scanner.evaluate_rules_all()
 
 if __name__ == '__main__':
     start = time.time()
